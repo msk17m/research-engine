@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+env/
+venv/
+ENV/
+
+# Testing & Cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+dist/
+build/
+.npm
+
+# Environment variables
+.env
+.env.local
+*.env
+
+# SQLite / Database & Exports
+*.db
+*.sqlite3
+data/exports/
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

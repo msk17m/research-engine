@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Research Assistant Engine · Minimalist Edition</title>
+  <link rel="stylesheet" href="/src/index.css" />
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const MATRIX_SCHEMA_COLUMNS = [
+      { key: "paper_title", label: "1. Paper Title", category: "id" },
+      { key: "publication_year", label: "2. Year", category: "id" },
+      { key: "study_type", label: "3. Study Type", category: "id" },
+      { key: "research_question", label: "4. Research Question / Objective", category: "method", grounded: true },
+      { key: "background_or_gap", label: "5. Background / Problem Statement", category: "method" },
+      { key: "core_method_or_approach", label: "6. Core Method / Approach", category: "method", grounded: true },
+      { key: "system_architecture_flow", label: "7. System Architecture Flow (Diagrams)", category: "visual" },
+      { key: "dataset_used", label: "8. Dataset Used", category: "data" },
+      { key: "sample_size_or_scale", label: "9. Sample Size / Scale", category: "data" },
+      { key: "baselines_compared", label: "10. Baselines Compared", category: "data" },
+      { key: "evaluation_metrics", label: "11. Evaluation Metrics", category: "data" },
+      { key: "key_results_or_findings", label: "12. Key Quantitative Results", category: "data", grounded: true },
+      { key: "key_graph_trends", label: "13. Key Graph / Plot Trends", category: "visual" },
+      { key: "main_claimed_contribution", label: "14. Main Claimed Contribution", category: "method", grounded: true },
+      { key: "key_assumptions", label: "15. Key Assumptions", category: "rigor" },
+      { key: "negative_results_or_failures", label: "16. Negative Results / Failures", category: "rigor" },
+      { key: "stated_limitations", label: "17. Stated Limitations", category: "rigor", grounded: true },
+      { key: "methodological_rigor_score", label: "18. Methodological Rigor & Bias", category: "rigor" },
+      { key: "author_future_work", label: "19. Author Future Work", category: "rigor" },
+      { key: "artifact_urls", label: "20a. Artifact URLs", category: "id" },
+      { key: "relation_to_topic", label: "20b. Relation to Proposed Topic", category: "id" },
+    ];
+
+    /* =========================================================================
+       Google Chrome Offline-Style Mini-Game (Light Minimalist Canvas):
+       "Chai & Citations Runner"
+       ========================================================================= */
+    function ChaiRunnerGame() {
+      const canvasRef = useRef(null);
+      const [score, setScore] = useState(0);
+      const [highScore, setHighScore] = useState(() => {
+        return parseInt(localStorage.getItem("chai_runner_hi") || "0", 10);
+      });
+      const [gameOver, setGameOver] = useState(false);
+
+      const stateRef = useRef({
+        running: true,
+        speed: 4.4,
+        frame: 0,
+        score: 0,
+        chai: 0,
+        dino: { x: 52, y: 94, vy: 0, w: 26, h: 28, jumps: 0, grounded: true },
+        obstacles: [],
+        bonuses: [],
+        clouds: [
+          { x: 140, y: 24, speed: 0.45 },
+          { x: 380, y: 38, speed: 0.32 },
+          { x: 610, y: 18, speed: 0.55 },
+        ],
+      });
+
+      const triggerJump = () => {
+        const st = stateRef.current;
+        if (!st.running) {
+          st.running = true;
+          st.speed = 4.4;
+          st.frame = 0;
+          st.score = 0;
+          st.chai = 0;
+          st.dino = { x: 52, y: 94, vy: 0, w: 26, h: 28, jumps: 0, grounded: true };
+          st.obstacles = [];
+          st.bonuses = [];
+          setGameOver(false);
+          setScore(0);
+          return;
+        }
+        if (st.dino.jumps < 2) {
+          st.dino.vy = -8.6;
+          st.dino.grounded = false;
+          st.dino.jumps += 1;
+        }
+      };
+
+      useEffect(() => {
+        const onKeyDown = (e) => {
+          if (e.code === "Space" || e.code === "ArrowUp") {
+            const tag = (e.target && e.target.tagName) || "";
+            if (tag === "INPUT" || tag === "TEXTAREA") return;
+            e.preventDefault();
+            triggerJump();
+          }
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+      }, []);
+
+      useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        let animId;
+
+        const OBSTACLE_LABELS = ["Reviewer #2", "Paywall", "p > 0.05", "404 Ref"];
+
+        const renderLoop = () => {
+          const st = stateRef.current;
+          const W = canvas.width;
+          const H = canvas.height;
+          const GROUND_Y = 122;
+
+          ctx.clearRect(0, 0, W, H);
+
+          // Crisp minimalist white/light canvas
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, W, H);
+
+          // Subtle clouds
+          ctx.fillStyle = "#f1f5f9";
+          st.clouds.forEach((c) => {
+            if (st.running) c.x -= c.speed;
+            if (c.x < -60) c.x = W + 40;
+            ctx.beginPath();
+            ctx.roundRect(c.x, c.y, 46, 12, 6);
+            ctx.fill();
+          });
+
+          // Ground line + dashed runway (Chrome Dino minimalist style)
+          ctx.strokeStyle = "#cbd5e1";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(0, GROUND_Y);
+          ctx.lineTo(W, GROUND_Y);
+          ctx.stroke();
+
+          ctx.fillStyle = "#e2e8f0";
+          for (let gx = -(st.frame * st.speed) % 36; gx < W; gx += 36) {
+            ctx.fillRect(gx, GROUND_Y + 5, 12, 2);
+          }
+
+          if (st.running) {
+            st.frame += 1;
+            st.speed = Math.min(8.5, 4.4 + st.frame * 0.0008);
+
+            // Dino physics
+            st.dino.vy += 0.45;
+            st.dino.y += st.dino.vy;
+            if (st.dino.y >= GROUND_Y - st.dino.h) {
+              st.dino.y = GROUND_Y - st.dino.h;
+              st.dino.vy = 0;
+              st.dino.grounded = true;
+              st.dino.jumps = 0;
+            }
+
+            // Spawn obstacles
+            if (st.frame % Math.max(58, Math.floor(105 - st.speed * 5)) === 0) {
+              const label = OBSTACLE_LABELS[Math.floor(Math.random() * OBSTACLE_LABELS.length)];
+              const h = 20 + Math.floor(Math.random() * 12);
+              st.obstacles.push({
+                x: W + 20,
+                y: GROUND_Y - h,
+                w: 20,
+                h,
+                label,
+              });
+            }
+
+            // Spawn floating Chai cups ☕
+            if (st.frame % 135 === 0) {
+              st.bonuses.push({
+                x: W + 20,
+                y: GROUND_Y - 56 - Math.floor(Math.random() * 22),
+                w: 18,
+                h: 18,
+                collected: false,
+              });
+            }
+
+            // Move & check obstacles
+            for (let i = st.obstacles.length - 1; i >= 0; i--) {
+              const ob = st.obstacles[i];
+              ob.x -= st.speed;
+              if (
+                st.dino.x + st.dino.w - 6 > ob.x &&
+                st.dino.x + 6 < ob.x + ob.w &&
+                st.dino.y + st.dino.h - 4 > ob.y
+              ) {
+                st.running = false;
+                setGameOver(true);
+                const finalScore = Math.floor(st.score);
+                setHighScore((prev) => {
+                  const nextHi = Math.max(prev, finalScore);
+                  localStorage.setItem("chai_runner_hi", String(nextHi));
+                  return nextHi;
+                });
+              }
+              if (ob.x < -60) st.obstacles.splice(i, 1);
+            }
+
+            // Move & check Chai bonuses
+            for (let i = st.bonuses.length - 1; i >= 0; i--) {
+              const b = st.bonuses[i];
+              b.x -= st.speed;
+              if (
+                !b.collected &&
+                st.dino.x + st.dino.w > b.x &&
+                st.dino.x < b.x + b.w &&
+                st.dino.y + st.dino.h > b.y &&
+                st.dino.y < b.y + b.h
+              ) {
+                b.collected = true;
+                st.score += 25;
+                st.chai += 1;
+              }
+              if (b.x < -30 || b.collected) st.bonuses.splice(i, 1);
+            }
+
+            st.score += 0.15;
+            if (st.frame % 5 === 0) {
+              setScore(Math.floor(st.score));
+            }
+          }
+
+          // Draw Scholar-Dino (Slate & Blue with Chai-Orange Mortarboard Cap)
+          const d = st.dino;
+          ctx.save();
+          ctx.fillStyle = "#0f172a";
+          ctx.beginPath();
+          ctx.roundRect(d.x, d.y + 6, d.w - 4, d.h - 10, 4);
+          ctx.fill();
+          ctx.fillRect(d.x + 7, d.y, 17, 12);
+          // Mortarboard cap
+          ctx.fillStyle = "#ea580c";
+          ctx.fillRect(d.x + 4, d.y - 3, 23, 3);
+          // Eye
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(d.x + 19, d.y + 3, 3, 3);
+          // Legs
+          ctx.fillStyle = "#334155";
+          const legOffset = st.running && d.grounded ? (Math.floor(st.frame / 5) % 2 === 0 ? 3 : -3) : 0;
+          ctx.fillRect(d.x + 4, d.y + d.h - 5, 4, 5 + (legOffset > 0 ? 2 : 0));
+          ctx.fillRect(d.x + 13, d.y + d.h - 5, 4, 5 + (legOffset < 0 ? 2 : 0));
+          ctx.restore();
+
+          // Draw Obstacles
+          st.obstacles.forEach((ob) => {
+            ctx.fillStyle = "#dc2626";
+            ctx.beginPath();
+            ctx.roundRect(ob.x, ob.y, ob.w, ob.h, 4);
+            ctx.fill();
+            ctx.fillStyle = "#64748b";
+            ctx.font = "600 9px 'JetBrains Mono', monospace";
+            ctx.fillText(ob.label, ob.x - 10, ob.y - 5);
+          });
+
+          // Draw Floating Chai Cups ☕
+          st.bonuses.forEach((b) => {
+            ctx.font = "15px sans-serif";
+            ctx.fillText("☕", b.x, b.y + 14);
+          });
+
+          // HUD Score top-right
+          ctx.fillStyle = "#475569";
+          ctx.font = "600 11px 'JetBrains Mono', monospace";
+          const hiStr = String(Math.max(highScore, Math.floor(st.score))).padStart(5, "0");
+          const curStr = String(Math.floor(st.score)).padStart(5, "0");
+          ctx.fillText(`HI ${hiStr}   ${curStr}   ☕x${st.chai}`, W - 210, 20);
+
+          if (!st.running) {
+            ctx.fillStyle = "rgba(255, 255, 255, 0.86)";
+            ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = "#0f172a";
+            ctx.font = "700 13px 'Space Grotesk', sans-serif";
+            ctx.fillText("PEER REVIEW COLLISION! (GAME OVER)", W / 2 - 120, H / 2 - 6);
+            ctx.fillStyle = "#ea580c";
+            ctx.font = "600 11.5px 'DM Sans', sans-serif";
+            ctx.fillText("Press SPACE or Click Canvas to Jump Back In ☕", W / 2 - 122, H / 2 + 14);
+          }
+
+          animId = requestAnimationFrame(renderLoop);
+        };
+
+        animId = requestAnimationFrame(renderLoop);
+        return () => cancelAnimationFrame(animId);
+      }, [highScore]);
+
+      return (
+        <div className="dino-game-wrapper">
+          <div className="dino-game-header">
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              <span>🦖☕</span>
+              <strong style={{ fontFamily: "var(--font-heading)", color: "var(--text-main)" }}>
+                Chai & Citations Runner
+              </strong>
+              <span style={{ color: "var(--text-muted)", fontSize: "0.73rem" }}>
+                Jump over "Reviewer #2" & collect Chai ☕ while your papers process in the background
+              </span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span className="trim-badge">SPACE / ↑ / Click</span>
+              {gameOver && (
+                <button className="btn-secondary" style={{ padding: "3px 9px" }} onClick={triggerJump}>
+                  ↻ Replay
+                </button>
+              )}
+            </div>
+          </div>
+          <canvas
+            ref={canvasRef}
+            width={720}
+            height={140}
+            className="dino-canvas"
+            onClick={triggerJump}
+            title="Click or press SPACE to jump!"
+          />
+        </div>
+      );
+    }
+
+    /* =========================================================================
+       Main Research Assistant Application (Minimalist Light + Centered Upload + Full-Screen Matrix)
+       ========================================================================= */
+    function App() {
+      const [mode, setMode] = useState("full");
+      const [topic, setTopic] = useState("");
+      const [apiKey, setApiKey] = useState("");
+      const [sessionId, setSessionId] = useState(null);
+      const [papers, setPapers] = useState([]);
+      const [results, setResults] = useState(null);
+      const [viewMode, setViewMode] = useState("upload"); // "upload" (centralized dashboard) | "workspace" (full-screen matrix)
+      const [activeTab, setActiveTab] = useState("matrix");
+      const [categoryFilter, setCategoryFilter] = useState("all");
+      const [selectedQuote, setSelectedQuote] = useState(null);
+      const [isProcessing, setIsProcessing] = useState(false);
+      const [progressPercent, setProgressPercent] = useState(0);
+      const [progressStep, setProgressStep] = useState("idle");
+      const [statusMsg, setStatusMsg] = useState("");
+      const [errorMsg, setErrorMsg] = useState("");
+      const [showArcade, setShowArcade] = useState(!navigator.onLine);
+
+      const maxPapers = mode === "full" ? 20 : 3;
+
+      // Auto-open game when offline
+      useEffect(() => {
+        const handleOffline = () => setShowArcade(true);
+        window.addEventListener("offline", handleOffline);
+        return () => window.removeEventListener("offline", handleOffline);
+      }, []);
+
+      // Restore latest session on load
+      useEffect(() => {
+        fetch("/api/latest-session")
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => {
+            if (data && data.session_id) {
+              setSessionId(data.session_id);
+              setMode(data.mode || "full");
+              setTopic(data.topic || "");
+              if (data.papers && data.papers.length > 0) {
+                setPapers(data.papers);
+              }
+              if (data.matrices && data.matrices.length > 0) {
+                setResults(data);
+                setProgressPercent(100);
+                setProgressStep("done");
+                setViewMode("workspace");
+              }
+            }
+          })
+          .catch(() => {});
+      }, []);
+
+      const handleStartFreshSession = () => {
+        if (isProcessing) return;
+        setSessionId(null);
+        setPapers([]);
+        setResults(null);
+        setTopic("");
+        setProgressPercent(0);
+        setProgressStep("idle");
+        setErrorMsg("");
+        setViewMode("upload");
+      };
+
+      const ensureSession = async (currentMode, currentTopic) => {
+        if (sessionId) return sessionId;
+        const resp = await fetch("/api/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            topic: currentTopic.trim() || "Untitled Research Study",
+            mode: currentMode,
+          }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || "Failed to create session");
+        setSessionId(data.session_id);
+        return data.session_id;
+      };
+
+      const handleModeSwitch = (newMode) => {
+        if (isProcessing) return;
+        setMode(newMode);
+        setSessionId(null);
+        setPapers([]);
+        setResults(null);
+        setProgressPercent(0);
+        setErrorMsg("");
+      };
+
+      const handleFileUpload = async (e) => {
+        const files = Array.from(e.target.files || []);
+        e.target.value = "";
+        if (!files.length) return;
+        setErrorMsg("");
+        try {
+          setIsProcessing(true);
+          setProgressStep("upload");
+          setProgressPercent(8);
+          setStatusMsg("Validating academic structure & trimming Reference sections (<5ms/paper)...");
+          const sid = await ensureSession(mode, topic || "Academic Research Topic");
+          const formData = new FormData();
+          files.forEach((f) => formData.append("files", f));
+          const resp = await fetch(`/api/${sid}/upload`, {
+            method: "POST",
+            body: formData,
+          });
+          const data = await resp.json();
+          if (!resp.ok) throw new Error(data.detail || "Upload failed");
+          setPapers((prev) => [...prev, ...data.uploaded]);
+          setProgressPercent(15);
+        } catch (err) {
+          setErrorMsg(err.message);
+        } finally {
+          setIsProcessing(false);
+          setStatusMsg("");
+        }
+      };
+
+      const handleDeletePaper = async (paperId) => {
+        if (!sessionId || isProcessing) return;
+        setErrorMsg("");
+        const resp = await fetch(`/api/${sessionId}/paper/${paperId}`, { method: "DELETE" });
+        if (resp.ok) {
+          setPapers((prev) => prev.filter((p) => p.id !== paperId));
+        }
+      };
+
+      const handleAnalyze = async () => {
+        if (!sessionId || papers.length < 2) return;
+        setErrorMsg("");
+        setIsProcessing(true);
+        setShowArcade(true);
+        setProgressPercent(5);
+        setProgressStep("matrix");
+        setStatusMsg("Launching parallel 20-column extraction & Lock 4 quote verification...");
+        try {
+          const headers = { "Content-Type": "application/json" };
+          if (apiKey.trim()) headers["X-Gemini-Api-Key"] = apiKey.trim();
+
+          const resp = await fetch(`/api/${sessionId}/analyze`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              run_stress_test: mode === "full",
+              async_mode: true,
+              topic: topic.trim() || undefined,
+            }),
+          });
+          const startData = await resp.json();
+          if (!resp.ok) throw new Error(startData.detail || "Analysis failed to start");
+
+          if (startData.status === "done") {
+            setResults(startData);
+            setProgressPercent(100);
+            setProgressStep("done");
+            setActiveTab("matrix");
+            setViewMode("workspace");
+            return;
+          }
+
+          while (true) {
+            await new Promise((r) => setTimeout(r, 2000));
+            const pollResp = await fetch(`/api/${sessionId}/results`);
+            if (!pollResp.ok) continue;
+            const pollData = await pollResp.json();
+
+            if (pollData.progress) {
+              if (typeof pollData.progress.percent === "number") {
+                setProgressPercent(Math.max(5, pollData.progress.percent));
+              }
+              if (pollData.progress.step) {
+                setProgressStep(pollData.progress.step);
+              }
+              if (pollData.progress.message) {
+                setStatusMsg(pollData.progress.message);
+              }
+            }
+            if (pollData.matrices && pollData.matrices.length > 0) {
+              setResults(pollData);
+            }
+            if (pollData.status === "done") {
+              setResults(pollData);
+              setProgressPercent(100);
+              setProgressStep("done");
+              setActiveTab("matrix");
+              setViewMode("workspace");
+              break;
+            }
+            if (pollData.status === "error") {
+              throw new Error(pollData.error_message || "Analysis failed");
+            }
+          }
+        } catch (err) {
+          setErrorMsg(err.message);
+        } finally {
+          setIsProcessing(false);
+          setStatusMsg("");
+        }
+      };
+
+      const handleResynthesize = async () => {
+        if (!sessionId || isProcessing) return;
+        setErrorMsg("");
+        setIsProcessing(true);
+        setProgressStep("synthesis");
+        setProgressPercent(75);
+        setStatusMsg("Re-synthesizing on cached paper matrices (~5s)...");
+        try {
+          const headers = { "Content-Type": "application/json" };
+          if (apiKey.trim()) headers["X-Gemini-Api-Key"] = apiKey.trim();
+          const resp = await fetch(`/api/${sessionId}/resynthesize`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ topic }),
+          });
+          const data = await resp.json();
+          if (!resp.ok) throw new Error(data.detail || "Re-synthesis failed");
+          setResults(data);
+          setProgressPercent(100);
+          setProgressStep("done");
+          setActiveTab("hypothesis");
+        } catch (err) {
+          setErrorMsg(err.message);
+        } finally {
+          setIsProcessing(false);
+          setStatusMsg("");
+        }
+      };
+
+      const handleRefreshStressTest = async () => {
+        if (!sessionId || isProcessing) return;
+        setErrorMsg("");
+        setIsProcessing(true);
+        setProgressStep("stress_test");
+        setProgressPercent(92);
+        setStatusMsg("Running 'Devil's Advocate' harsh peer review...");
+        try {
+          const headers = {};
+          if (apiKey.trim()) headers["X-Gemini-Api-Key"] = apiKey.trim();
+          const resp = await fetch(`/api/${sessionId}/stress-test`, {
+            method: "POST",
+            headers,
+          });
+          const data = await resp.json();
+          if (!resp.ok) throw new Error(data.detail || "Stress-test failed");
+          setResults((prev) => ({ ...prev, stress_test: data.stress_test }));
+          setProgressPercent(100);
+          setProgressStep("done");
+        } catch (err) {
+          setErrorMsg(err.message);
+        } finally {
+          setIsProcessing(false);
+          setStatusMsg("");
+        }
+      };
+
+      const visibleColumns = MATRIX_SCHEMA_COLUMNS.filter(
+        (col) => categoryFilter === "all" || col.category === categoryFilter
+      );
+
+      const renderCell = (matrix, col) => {
+        const val = matrix[col.key];
+        if (val === null || val === undefined) {
+          return <span className="null-val">—</span>;
+        }
+        if (col.key === "methodological_rigor_score" && typeof val === "object") {
+          return (
+            <div>
+              <strong style={{ color: val.risk_level === "Low" ? "var(--emerald)" : "var(--amber)" }}>
+                [{val.risk_level || "Medium"} Risk]
+              </strong>{" "}
+              <span>{val.rationale}</span>
+            </div>
+          );
+        }
+        if (typeof val === "object" && "value" in val) {
+          if (!val.value) return <span className="null-val">—</span>;
+          const isVerified = val.verified !== false;
+          return (
+            <div>
+              <div>{val.value}</div>
+              {val.verbatim_quote && (
+                <button
+                  className={`quote-badge ${isVerified ? "" : "unverified"}`}
+                  onClick={() =>
+                    setSelectedQuote({
+                      paperTitle: matrix.paper_title,
+                      columnLabel: col.label,
+                      ...val,
+                    })
+                  }
+                >
+                  {isVerified ? "✓ Verified" : "⚠ Unverified"} · p.{val.source_page || "?"}
+                </button>
+              )}
+            </div>
+          );
+        }
+        return <span>{String(val)}</span>;
+      };
+
+      const completedMatricesCount = results?.matrices?.length || 0;
+
+      const renderProgressAndArcade = () => {
+        if (!isProcessing && !showArcade) return null;
+        return (
+          <div className="progress-hub-card">
+            <div className="progress-header-row">
+              <div className="progress-title-group">
+                {isProcessing ? <span className="pulse-dot" /> : <span>☕</span>}
+                <div>
+                  <div style={{ fontFamily: "var(--font-heading)", fontWeight: 700, fontSize: "0.92rem" }}>
+                    {isProcessing
+                      ? statusMsg || "Analyzing uploaded papers in background..."
+                      : results
+                      ? `Analysis Ready (${completedMatricesCount} Papers) — Waiting Room Arcade`
+                      : "Waiting Room Arcade — Play while your engine works or when offline"}
+                  </div>
+                  <div style={{ fontSize: "0.74rem", color: "var(--text-muted)", marginTop: "2px" }}>
+                    {isProcessing
+                      ? `Results stream automatically every 2s (${completedMatricesCount}/${papers.length} matrices ready)`
+                      : "Press SPACE, Up Arrow, or Click the canvas below to jump"}
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span className="progress-pct-badge">
+                  {isProcessing ? `${progressPercent}%` : results ? "100% DONE" : "READY"}
+                </span>
+              </div>
+            </div>
+
+            <div className="progress-track">
+              <div
+                className="progress-fill"
+                style={{ width: `${isProcessing ? Math.max(6, progressPercent) : results ? 100 : 0}%` }}
+              />
+            </div>
+
+            <div className="pipeline-stepper">
+              <div className={`step-pill ${papers.length >= 2 ? "done" : progressStep === "upload" ? "active" : ""}`}>
+                <span>1. 📄 PDF Gate & Trim</span>
+              </div>
+              <div
+                className={`step-pill ${
+                  progressStep === "matrix" || progressStep === "starting"
+                    ? "active"
+                    : completedMatricesCount >= papers.length && papers.length >= 2
+                    ? "done"
+                    : ""
+                }`}
+              >
+                <span>2. 🔬 20-Col Matrix ({completedMatricesCount}/{papers.length || 0})</span>
+              </div>
+              <div
+                className={`step-pill ${
+                  progressStep === "synthesis"
+                    ? "active"
+                    : results?.synthesis?.clusters?.length > 0
+                    ? "done"
+                    : ""
+                }`}
+              >
+                <span>3. 🧩 Cross-Synthesis</span>
+              </div>
+              <div
+                className={`step-pill ${
+                  progressStep === "hypothesis" || progressStep === "stress_test"
+                    ? "active"
+                    : results?.hypothesis
+                    ? "done"
+                    : ""
+                }`}
+              >
+                <span>4. 💡 Hypothesis & Review</span>
+              </div>
+            </div>
+
+            <ChaiRunnerGame />
+          </div>
+        );
+      };
+
+      return (
+        <div className="app-shell">
+          {/* Minimalist White Navbar */}
+          <header className="navbar-wrap">
+            <nav className="navbar">
+              <div className="brand-group">
+                <svg viewBox="0 0 48 48" fill="none" className="brand-logo-svg" xmlns="http://www.w3.org/2000/svg">
+                  <rect width="48" height="48" rx="12" fill="#0f172a" />
+                  <rect x="11" y="11" width="11" height="11" rx="2.5" fill="#3b82f6" />
+                  <rect x="18" y="18" width="11" height="11" rx="2.5" fill="#ffffff" opacity="0.9" />
+                  <rect x="25" y="25" width="11" height="11" rx="2.5" fill="#ea580c" />
+                </svg>
+                <div>
+                  <div className="brand-title">
+                    <span>Research Assistant Engine</span>
+                  </div>
+                  <div className="brand-subtitle">
+                    20-Column Grounded Literature Matrix · Multimodal Diagrams & Plots · Hypothesis Synthesis
+                  </div>
+                </div>
+              </div>
+
+              <div className="header-actions">
+                <span className="pill-badge chai" title="Full 20-Paper Literature Review for the price of a cup of chai/coffee!">
+                  ☕ Full Review: <strong>₹19</strong> <span style={{ textDecoration: "line-through", opacity: 0.65 }}>₹49</span> (1 Chai/Coffee)
+                </span>
+                <span className="pill-badge emerald">
+                  🛡️ 4-Lock Zero-Hallucination
+                </span>
+
+                {/* View Switcher between Centered Upload Dashboard & Full-Screen Matrix */}
+                <button
+                  className={`pill-badge interactive ${viewMode === "upload" ? "active" : ""}`}
+                  onClick={() => setViewMode("upload")}
+                >
+                  📂 Upload Dashboard ({papers.length}/{maxPapers})
+                </button>
+                {results && (
+                  <button
+                    className={`pill-badge interactive ${viewMode === "workspace" ? "active" : ""}`}
+                    onClick={() => setViewMode("workspace")}
+                  >
+                    📊 Full-Screen Matrix ({results.matrices.length})
+                  </button>
+                )}
+
+                <button
+                  className={`pill-badge interactive ${showArcade ? "active" : ""}`}
+                  onClick={() => setShowArcade((prev) => !prev)}
+                >
+                  🎮 {showArcade ? "Hide Game" : "Chai Runner ☕"}
+                </button>
+              </div>
+            </nav>
+          </header>
+
+          {/* ===============================================================
+             VIEW 1: CENTRALIZED UPLOAD DASHBOARD (IN THE MIDDLE OF SCREEN)
+             =============================================================== */}
+          {viewMode === "upload" && (
+            <div className="center-stage">
+              {renderProgressAndArcade()}
+
+              <div className="upload-dashboard-card">
+                <div className="dashboard-hero">
+                  <h1>Centralized Research Upload Dashboard</h1>
+                  <p>
+                    Upload 2 to 20 research PDFs for deterministic reference trimming, 20-column multimodal extraction, and page-grounded quote verification.
+                  </p>
+                </div>
+
+                {/* 1. Review Tier Selection */}
+                <div>
+                  <div className="section-label">
+                    <span>1. Select Literature Review Tier</span>
+                    {sessionId && (
+                      <button
+                        onClick={handleStartFreshSession}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: "var(--primary)",
+                          cursor: "pointer",
+                          fontSize: "0.73rem",
+                          fontWeight: 700,
+                        }}
+                      >
+                        + Start Fresh Session
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="mode-grid">
+                    {/* Paid Full Review Mode with Chai/Coffee Symbol & Note */}
+                    <div
+                      className={`mode-card ${mode === "full" ? "active" : ""}`}
+                      onClick={() => handleModeSwitch("full")}
+                    >
+                      <div>
+                        <div className="mode-card-title">
+                          <span>☕ Full Literature Review</span>
+                          <div className="price-tag-group">
+                            <span className="price-promo">₹19</span>
+                            <span className="price-strike">₹49</span>
+                          </div>
+                        </div>
+                        <div className="mode-card-desc">
+                          Up to <strong>20 papers</strong> · All <strong>20 columns</strong> · Multimodal Diagrams & Plots · Verbatim Quotes · Devil's Advocate + <strong>2 Free Re-Runs</strong>.
+                        </div>
+                      </div>
+                      <div className="chai-note-banner">
+                        <span className="chai-steam-icon" role="img" aria-label="Chai or Coffee">☕</span>
+                        <div>
+                          <strong>Price of a Cutting Chai / Coffee!</strong> Just ₹19 to synthesize 20 papers & save 15+ hrs of reading.
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Quick Free Mode */}
+                    <div
+                      className={`mode-card ${mode === "quick" ? "active" : ""}`}
+                      onClick={() => handleModeSwitch("quick")}
+                    >
+                      <div>
+                        <div className="mode-card-title">
+                          <span>⚡ Quick Teaser Mode</span>
+                          <span style={{ color: "var(--emerald)", fontSize: "0.76rem", fontWeight: 700 }}>FREE (₹0)</span>
+                        </div>
+                        <div className="mode-card-desc">
+                          Up to <strong>3 papers</strong> (min 2) · <strong>8 core columns</strong> · Fast synthesis & hypothesis preview.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Topic & Optional API Key */}
+                <div className="input-row-grid">
+                  <div>
+                    <span className="section-label">2. Proposed Research Topic / Title</span>
+                    <input
+                      type="text"
+                      className="input-field"
+                      placeholder="e.g., mRNA-LNP for all types of Gaucher disease"
+                      value={topic}
+                      onChange={(e) => setTopic(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <span className="section-label">Optional: Custom Gemini API Key</span>
+                    <input
+                      type="password"
+                      className="input-field"
+                      placeholder="Uses server key if left blank"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* 3. Centralized Dropzone & Uploaded Paper Chips */}
+                <div>
+                  <span className="section-label">
+                    <span>3. Upload Research PDFs (2 to {maxPapers} Papers)</span>
+                    <span style={{ color: "var(--primary)", fontWeight: 700 }}>{papers.length} / {maxPapers} Uploaded</span>
+                  </span>
+
+                  <label className="upload-dropzone">
+                    <input
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      multiple
+                      style={{ display: "none" }}
+                      onChange={handleFileUpload}
+                      disabled={isProcessing || papers.length >= maxPapers}
+                    />
+                    <div style={{ fontSize: "1.6rem", marginBottom: "6px" }}>📄</div>
+                    <div style={{ fontWeight: 700, fontSize: "0.9rem", fontFamily: "var(--font-heading)", color: "var(--text-main)" }}>
+                      Click to Select Research Paper PDFs
+                    </div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                      Automatically strips Reference/Bibliography pages in &lt;5ms to save 20–35% input tokens
+                    </div>
+                  </label>
+
+                  {papers.length > 0 && (
+                    <div className="paper-chips-grid">
+                      {papers.map((p) => (
+                        <div key={p.id} className="paper-item">
+                          <span className="paper-name" title={p.filename}>
+                            {p.filename}
+                          </span>
+                          <div className="paper-meta">
+                            <span className="trim-badge" title="Pages kept / Reference pages trimmed">
+                              {p.pages_kept}p {p.pages_trimmed > 0 ? `(-${p.pages_trimmed})` : ""}
+                            </span>
+                            <button
+                              className="btn-remove"
+                              onClick={() => handleDeletePaper(p.id)}
+                              title="Remove paper"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Action Buttons */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <button
+                    className="btn-primary"
+                    disabled={isProcessing || papers.length < 2}
+                    onClick={handleAnalyze}
+                  >
+                    {isProcessing
+                      ? `⏳ Processing Papers (${progressPercent}%)...`
+                      : `⚡ Generate ${mode === "full" ? "20-Column" : "8-Column"} Study Matrix & Hypothesis`}
+                  </button>
+
+                  {results && results.matrices && results.matrices.length > 0 && (
+                    <button
+                      className="btn-secondary"
+                      style={{ justifyContent: "center", padding: "10px" }}
+                      onClick={() => setViewMode("workspace")}
+                    >
+                      📊 Open Full-Screen Study Matrix ({results.matrices.length} Papers Ready) →
+                    </button>
+                  )}
+                </div>
+
+                {papers.length === 1 && (
+                  <div style={{ fontSize: "0.76rem", color: "var(--amber)", textAlign: "center" }}>
+                    Upload at least 1 more paper (minimum 2 papers required for cross-synthesis).
+                  </div>
+                )}
+
+                {errorMsg && (
+                  <div
+                    style={{
+                      background: "var(--danger-soft)",
+                      border: "1px solid #fecaca",
+                      color: "var(--danger)",
+                      padding: "10px 12px",
+                      borderRadius: "10px",
+                      fontSize: "0.78rem",
+                    }}
+                  >
+                    ⚠ {errorMsg}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ===============================================================
+             VIEW 2: FULL-SCREEN MATRIX & SYNTHESIS WORKSPACE (100% WIDTH)
+             =============================================================== */}
+          {viewMode === "workspace" && (
+            <main className="full-screen-workspace">
+              {renderProgressAndArcade()}
+
+              {!results ? (
+                <div className="center-stage">
+                  <div className="upload-dashboard-card" style={{ textAlign: "center" }}>
+                    <h2>No Matrix Generated Yet</h2>
+                    <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", margin: "8px 0 16px" }}>
+                      Upload at least 2 research PDFs in the Centralized Upload Dashboard to generate your full-screen 20-column matrix.
+                    </p>
+                    <button className="btn-primary" onClick={() => setViewMode("upload")}>
+                      📂 Go to Centralized Upload Dashboard
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Top Workspace Toolbar */}
+                  <div className="workspace-toolbar">
+                    <div className="tab-group">
+                      <button
+                        className={`tab-btn ${activeTab === "matrix" ? "active" : ""}`}
+                        onClick={() => setActiveTab("matrix")}
+                      >
+                        📊 20-Column Study Matrix ({results.matrices.length} Papers)
+                      </button>
+                      <button
+                        className={`tab-btn ${activeTab === "synthesis" ? "active" : ""}`}
+                        onClick={() => setActiveTab("synthesis")}
+                      >
+                        🧩 Cross-Synthesis & Gaps ({results.synthesis?.gaps?.length || 0})
+                      </button>
+                      <button
+                        className={`tab-btn ${activeTab === "hypothesis" ? "active" : ""}`}
+                        onClick={() => setActiveTab("hypothesis")}
+                      >
+                        💡 Hypothesis & Peer Stress-Test
+                      </button>
+                    </div>
+
+                    <div className="export-bar">
+                      <button className="btn-secondary" onClick={() => setViewMode("upload")}>
+                        📂 Upload / Session Setup ({papers.length}/{maxPapers})
+                      </button>
+                      {results.token_savings && results.token_savings.pages_trimmed > 0 && (
+                        <span className="trim-badge" style={{ padding: "5px 10px" }}>
+                          ✂ Trimmed {results.token_savings.pages_trimmed} ref pages ({results.token_savings.percent_saved}% saved)
+                        </span>
+                      )}
+                      <a
+                        className="btn-secondary"
+                        href={`/api/${sessionId}/export/excel`}
+                        style={{ textDecoration: "none" }}
+                      >
+                        📥 Excel (.xlsx)
+                      </a>
+                      <a
+                        className="btn-secondary"
+                        href={`/api/${sessionId}/export/markdown`}
+                        style={{ textDecoration: "none" }}
+                      >
+                        📝 Markdown (.md)
+                      </a>
+                      <a
+                        className="btn-secondary"
+                        href={`/api/${sessionId}/export/bibtex`}
+                        style={{ textDecoration: "none" }}
+                      >
+                        📚 BibTeX (.bib)
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* TAB 1: FULL-SCREEN 20-COLUMN STUDY MATRIX */}
+                  {activeTab === "matrix" && (
+                    <>
+                      <div className="filter-bar-row">
+                        <div className="filter-pills">
+                          {[
+                            { id: "all", label: "All 20 Columns" },
+                            { id: "id", label: "Identification & Link" },
+                            { id: "method", label: "Problem & Methodology" },
+                            { id: "visual", label: "Diagrams & Plots (Multimodal)" },
+                            { id: "data", label: "Data, Metrics & Results" },
+                            { id: "rigor", label: "Limitations, Rigor & Future Work" },
+                          ].map((f) => (
+                            <button
+                              key={f.id}
+                              className={`filter-pill ${categoryFilter === f.id ? "active" : ""}`}
+                              onClick={() => setCategoryFilter(f.id)}
+                            >
+                              {f.label}
+                            </button>
+                          ))}
+                        </div>
+                        <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                          Topic: <strong style={{ color: "var(--text-main)" }}>{topic || results.topic}</strong> · Click any green badge to inspect verbatim PDF quote
+                        </div>
+                      </div>
+
+                      <div className="matrix-container">
+                        <table className="matrix-table">
+                          <thead>
+                            <tr>
+                              {visibleColumns.map((col) => (
+                                <th key={col.key}>{col.label}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {results.matrices.map((m, idx) => (
+                              <tr key={idx}>
+                                {visibleColumns.map((col) => (
+                                  <td key={col.key}>{renderCell(m, col)}</td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
+
+                  {/* TAB 2: CROSS-PAPER SYNTHESIS */}
+                  {activeTab === "synthesis" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+                      <div>
+                        <span className="section-label">Thematic & Methodological Clusters</span>
+                        <div className="cards-grid">
+                          {(results.synthesis?.clusters || []).map((c, i) => (
+                            <div key={i} className="info-card">
+                              <h4>{c.cluster_name}</h4>
+                              <div style={{ fontSize: "0.75rem", color: "var(--primary)", fontWeight: 600, marginBottom: "8px" }}>
+                                Shared Theme: {c.shared_theme}
+                              </div>
+                              <p>{c.description}</p>
+                              <div style={{ marginTop: "10px", fontSize: "0.73rem", color: "var(--text-muted)" }}>
+                                <strong>Papers:</strong> {(c.paper_titles || []).join(" · ")}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="section-label">Cross-Paper Disagreements & Contradictions</span>
+                        <div className="cards-grid">
+                          {(results.synthesis?.disagreements || []).map((d, i) => (
+                            <div key={i} className="info-card">
+                              <h4>⚡ {d.dimension}</h4>
+                              <div style={{ fontSize: "0.75rem", color: "var(--amber)", fontWeight: 600, marginBottom: "8px" }}>
+                                {d.paper_a} vs. {d.paper_b}
+                              </div>
+                              <p>{d.conflict_description}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="section-label">Triangulated Research Gaps</span>
+                        <div className="cards-grid">
+                          {(results.synthesis?.gaps || []).map((g, i) => (
+                            <div key={i} className="info-card" style={{ borderColor: "#bfdbfe" }}>
+                              <h4>🔍 {g.gap_title}</h4>
+                              <p style={{ marginBottom: "8px" }}>{g.gap_description}</p>
+                              <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "6px" }}>
+                                <strong>Evidence:</strong> {g.supporting_evidence}
+                              </div>
+                              <div style={{ fontSize: "0.76rem", color: "var(--emerald)", fontWeight: 600 }}>
+                                <strong>Direction:</strong> {g.direction_for_hypothesis}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 3: HYPOTHESIS, 2 FREE RE-RUNS & DEVIL'S ADVOCATE STRESS-TEST */}
+                  {activeTab === "hypothesis" && results.hypothesis && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+                      <div className="hypothesis-hero">
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "8px" }}>
+                          <h3>🎯 Proposed Tentative Hypothesis</h3>
+                          {mode === "full" && (
+                            <button
+                              className="btn-secondary"
+                              disabled={isProcessing || results.reruns_remaining <= 0}
+                              onClick={handleResynthesize}
+                            >
+                              🔄 Re-Synthesize on Cached Matrices ({results.reruns_remaining} Free Re-Runs Left)
+                            </button>
+                          )}
+                        </div>
+                        <div className="hypothesis-statement">
+                          {results.hypothesis.tentative_hypothesis}
+                        </div>
+                        <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: 1.55 }}>
+                          <strong>Grounded Rationale:</strong> {results.hypothesis.rationale}
+                        </p>
+                      </div>
+
+                      <div className="info-card">
+                        <h4>Measurable Research Objectives</h4>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "10px" }}>
+                          {(results.hypothesis.research_objectives || []).map((obj, i) => (
+                            <div
+                              key={i}
+                              style={{
+                                padding: "10px 12px",
+                                background: "var(--bg-subtle)",
+                                borderRadius: "8px",
+                                fontSize: "0.84rem",
+                                color: "var(--text-main)",
+                                border: "1px solid var(--border-light)",
+                              }}
+                            >
+                              {obj}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {mode === "full" && (
+                        <div className="stress-card">
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
+                            <div>
+                              <h4 style={{ color: "var(--danger)", fontSize: "1rem", fontFamily: "var(--font-heading)" }}>
+                                😈 "Devil's Advocate" Harsh Peer-Review Stress-Test
+                              </h4>
+                              <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                                Prepares you for thesis defense & reviewer critiques by attacking your hypothesis
+                              </div>
+                            </div>
+                            <button className="btn-secondary" onClick={handleRefreshStressTest} disabled={isProcessing}>
+                              ⚡ Refresh Peer Critique
+                            </button>
+                          </div>
+
+                          {results.stress_test ? (
+                            <>
+                              <p style={{ fontSize: "0.85rem", color: "#991b1b", marginBottom: "14px", lineHeight: 1.5 }}>
+                                <strong>Verdict:</strong> {results.stress_test.overall_peer_review_verdict}
+                              </p>
+                              {(results.stress_test.confounding_pitfalls || []).map((pit, idx) => (
+                                <div key={idx} className="pitfall-item">
+                                  <div style={{ fontWeight: 700, fontSize: "0.84rem", color: "var(--danger)", marginBottom: "4px" }}>
+                                    {idx + 1}. {pit.title} [{pit.severity} Risk]
+                                  </div>
+                                  <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "6px" }}>
+                                    <strong>Reviewer Critique:</strong> {pit.critique}
+                                  </div>
+                                  <div style={{ fontSize: "0.8rem", color: "var(--emerald)", fontWeight: 600 }}>
+                                    <strong>Defense / Mitigation:</strong> {pit.mitigation_strategy}
+                                  </div>
+                                </div>
+                              ))}
+                              <div style={{ marginTop: "12px", fontSize: "0.82rem", color: "#92400e", fontWeight: 500 }}>
+                                <strong>🧪 Decisive Falsification Test:</strong> {results.stress_test.falsification_test}
+                              </div>
+                            </>
+                          ) : (
+                            <p style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
+                              Click "Refresh Peer Critique" to run the Devil's Advocate stress-test.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </main>
+          )}
+
+          {/* Click-to-Verify Side Drawer */}
+          {selectedQuote && (
+            <div className="quote-drawer-backdrop" onClick={() => setSelectedQuote(null)}>
+              <div className="quote-drawer" onClick={(e) => e.stopPropagation()}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span className="pill-badge emerald">🛡️ Lock 4 Click-to-Verify Evidence</span>
+                  <button className="btn-remove" onClick={() => setSelectedQuote(null)}>✕</button>
+                </div>
+                <div>
+                  <div style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>Paper Title</div>
+                  <div style={{ fontWeight: 700, fontSize: "0.95rem", marginTop: "2px", fontFamily: "var(--font-heading)" }}>
+                    {selectedQuote.paperTitle}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>Matrix Field</div>
+                  <div style={{ fontWeight: 600, fontSize: "0.86rem", color: "var(--primary)", marginTop: "2px" }}>
+                    {selectedQuote.columnLabel} (Page {selectedQuote.source_page || "?"})
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: "0.74rem", color: "var(--text-muted)", marginBottom: "6px" }}>
+                    Synthesized Claim
+                  </div>
+                  <div style={{ fontSize: "0.86rem", lineHeight: 1.5, color: "var(--text-secondary)" }}>{selectedQuote.value}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: "0.74rem", color: "var(--text-muted)", marginBottom: "6px" }}>
+                    Verbatim Excerpt from PDF (Page {selectedQuote.source_page || "?"})
+                  </div>
+                  <div className="verbatim-box">"{selectedQuote.verbatim_quote}"</div>
+                </div>
+                <div style={{ fontSize: "0.76rem", color: selectedQuote.verified !== false ? "var(--emerald)" : "var(--amber)", fontWeight: 500 }}>
+                  {selectedQuote.verified !== false
+                    ? "✓ Deterministic Python Quote Verifier (Lock 4) confirmed this exact substring exists in the extracted PyMuPDF text."
+                    : "⚠ Substring normalized match flagged for manual inspection — verify directly on the cited page."}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+</html>
